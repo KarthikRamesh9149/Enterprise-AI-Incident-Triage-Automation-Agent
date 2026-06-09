@@ -1,0 +1,16 @@
+.env
+.venv/
+node_modules/
+.next/
+dist/
+build/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyc
+*.sqlite3
+reports/
+coverage/
+frontend/.env.local
+
