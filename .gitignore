@@ -13,4 +13,5 @@ __pycache__/
 reports/
 coverage/
 frontend/.env.local
-
+frontend/tsconfig.tsbuildinfo
+*.egg-info/
