@@ -1,87 +1,181 @@
 # Enterprise AI Incident Triage & Automation Agent
 
-Local-first enterprise incident response platform for AI-assisted DevOps, SRE automation, platform operations, and LLMOps workflows.
+An enterprise-style, local-first incident response platform that uses an AI triage agent, MCP-style tools, RBAC, audit logs, approval gates, evaluations, and observability dashboards to investigate incidents end to end.
 
-The system receives incident alerts, classifies severity, searches redacted logs and runbooks through MCP-style tools, checks service health and recent changes, finds related incidents, generates root cause hypotheses, drafts remediation/ticket/status-update artifacts, gates mock external actions behind human approval, stores traces/audit logs, and exposes reports, evaluations, observability, governance, and security dashboards.
+This is built as a real internal operations product: alerts become incidents, the agent gathers evidence through governed tools, likely root causes are scored, remediation and communication drafts are generated, risky actions pause for human approval, and every tool call, trace step, approval, report, and audit event is persisted.
 
-## Why This Project Matters
+## What This Demonstrates
 
-Recruiters from AI companies can inspect a complete product, not a notebook demo. The repo shows backend engineering, agent workflow design, local security controls, RBAC, MCP-style tool governance, deterministic evaluation, observability, Docker-based local operations, CI, tests, and a polished command-center UI.
+- Agentic workflow design for SRE and DevOps incident response.
+- FastAPI backend architecture with typed models, auth, RBAC, persistence, reports, evals, and auditability.
+- MCP-style tool governance: tool registry, schemas, permissions, risk levels, enable/disable controls, approval requirements, and persisted tool calls.
+- Security-aware AI system behavior: sensitive data redaction, prompt-injection detection, secret-safe reports, and human gates before actions.
+- Deterministic local demo and tests, with optional OpenAI Responses API synthesis for richer incident summaries.
+- Production-minded frontend UX: command center, traces, approvals, reports, evaluations, observability, security, and admin dashboards.
 
-## Tech Stack
+## Core Scenario
 
-- Backend: FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, JWT, Passlib, LangGraph dependency, OpenTelemetry-style local metrics hooks, optional OpenAI Responses API provider.
-- Frontend: Next.js, TypeScript, Tailwind CSS, lucide-react.
-- Data: PostgreSQL in Docker Compose, Redis for local cache/rate-limit readiness, SQLite fallback for quick local tests.
-- Local ops: Docker Compose, Makefile, seed scripts, pytest, ruff, mypy, GitHub Actions.
+The seeded demo incident is a `checkout-api` payment timeout spike after a retry configuration change.
+
+The workflow:
+
+1. Load an alert-backed incident.
+2. Classify severity.
+3. Search redacted application logs.
+4. Search runbooks and flag suspicious prompt-injection content.
+5. Check service health.
+6. Review recent service changes.
+7. Find related historical incidents.
+8. Generate root cause hypotheses and confidence scores.
+9. Draft remediation, ticket, and internal status update artifacts.
+10. Require incident commander/admin approval before mock external actions.
+11. Persist timeline events, tool calls, traces, approvals, reports, eval results, and audit logs.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  UI["Next.js Command Center"] --> API["FastAPI API"]
-  API --> DB["PostgreSQL / SQLite test fallback"]
-  API --> Redis["Redis"]
-  API --> Tools["MCP-style Tool Registry"]
-  Tools --> Logs["Mock logs"]
-  Tools --> Runbooks["Runbooks + injection checks"]
-  Tools --> Changes["Service changes"]
-  API --> Agent["Deterministic triage agent + optional OpenAI synthesis"]
-  Agent --> Approvals["Human approval queue"]
+  UI["Next.js command center"] --> API["FastAPI application API"]
+  API --> Auth["JWT auth + RBAC"]
+  API --> DB["PostgreSQL in Docker / SQLite local fallback"]
+  API --> Redis["Redis readiness for cache/rate limits"]
+  API --> Tools["MCP-style governed tool registry"]
+  Tools --> Logs["Application logs + redaction"]
+  Tools --> Runbooks["Runbooks + prompt-injection checks"]
+  Tools --> Changes["Service changes + related incidents"]
+  API --> Agent["Incident triage agent"]
+  Agent --> LLM["Mock provider or OpenAI Responses API"]
+  Agent --> Approvals["Human approval workflow"]
   Approvals --> Actions["Mock ticket/status/escalation actions"]
-  API --> Audit["Audit, security events, traces, evals, reports"]
+  API --> Evidence["Traces, reports, evals, audit logs, security events"]
 ```
+
+## Product Surfaces
+
+- Incident dashboard and command center.
+- Alert, service, log, runbook, and service-change views.
+- MCP tools console and tool governance.
+- Agent run history and trace viewer.
+- Approval queue for commander/admin review.
+- Mock action executor for approved local actions.
+- Incident reports with redacted evidence.
+- Evaluation dashboard for safety and quality checks.
+- Admin analytics, observability, audit logs, users, tool calls, and security events.
+
+## Tech Stack
+
+Backend:
+
+- FastAPI, Pydantic v2, SQLAlchemy 2, Alembic.
+- PostgreSQL, Redis, SQLite local fallback.
+- JWT authentication, password hashing, role-based access control.
+- OpenAI Responses API optional provider plus deterministic mock provider.
+- pytest, ruff, mypy.
+
+Frontend:
+
+- Next.js, TypeScript, Tailwind CSS.
+- Role-aware app shell and dashboards.
+- Typed API client and reusable UI components.
+
+Local operations:
+
+- Docker Compose.
+- Makefile commands.
+- GitHub Actions CI.
+- Seed scripts and deterministic evaluation runner.
 
 ## Local Setup
 
-1. Copy `.env.example` to `.env` if you want to customize values. Keep `LLM_PROVIDER=mock` for the fully deterministic demo.
-2. Start all services:
+The product runs without external services or paid API calls by default.
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
-3. Open `http://localhost:3000` and sign in with:
+Open:
 
 ```text
-admin@example.com / LocalDemoPass123!
-commander@example.com / LocalDemoPass123!
-engineer@example.com / LocalDemoPass123!
-viewer@example.com / LocalDemoPass123!
+http://localhost:3000
 ```
 
-## Migrations and Seed Data
+Demo users:
+
+```text
+admin@example.com       / LocalDemoPass123!
+commander@example.com   / LocalDemoPass123!
+engineer@example.com    / LocalDemoPass123!
+viewer@example.com      / LocalDemoPass123!
+```
+
+## Local Development
+
+Backend:
+
+```bash
+cd backend
+python -m pip install -e ".[dev]"
+python -m app.scripts.migrate
+python -m app.scripts.seed
+python -m uvicorn app.main:app --reload
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Useful Make targets:
 
 ```bash
 make migrate
 make seed
+make backend-test
+make backend-lint
+make backend-typecheck
+make frontend-typecheck
+make frontend-build
+make evals
+make smoke-test
+make verify
 ```
 
-The seed creates demo users, checkout-api incidents, alerts, redacted logs, runbooks including a suspicious prompt-injection case, service changes, related incidents, and the MCP-style tool registry.
+## OpenAI Support
 
-## Run the Incident Agent
+The app is deterministic by default:
 
-1. Log in as `commander@example.com` or `admin@example.com`.
-2. Open Incidents.
-3. Select `Checkout API payment timeout spike`.
-4. Click `Run agent`.
-5. Inspect trace steps, root cause output, pending approvals, tool calls, and timeline events.
+```env
+LLM_PROVIDER=mock
+```
 
-## OpenAI API Option
-
-The app works without OpenAI. To use OpenAI synthesis for the agent summary:
+To use OpenAI for incident-summary synthesis:
 
 ```env
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-OPENAI_CHAT_MODEL=gpt-5
+OPENAI_CHAT_MODEL=gpt-4.1-mini
+MAX_OUTPUT_TOKENS=300
 ```
 
-Tests and CI keep `LLM_PROVIDER=mock` and never require paid API calls. The provider uses the OpenAI Responses API according to the official OpenAI docs.
+Tests and CI use the mock provider and never require OpenAI credentials. OpenAI calls receive a structured, redacted incident evidence packet and are instructed to avoid unsupported claims.
 
-## MCP-Style Tools
+## MCP-Style Tool Layer
 
-Tools are registered with name, description, input/output schemas, permission level, risk level, enable/disable state, approval requirement, timeout, and rate limit settings. Every call is permission-checked, persisted, and audited.
+Tools are registered with:
+
+- Name and description.
+- Input and output schema metadata.
+- Required permission level.
+- Risk level.
+- Approval requirement.
+- Enable/disable state.
+- Timeout and rate-limit fields.
+- Persisted call input/output/status/latency.
+- Audit events.
 
 Implemented tools:
 
@@ -94,50 +188,91 @@ Implemented tools:
 - `create-ticket-draft`
 - `draft-status-update`
 
-## Human Approval
+## Security And Governance
 
-Ticket creation, status updates, escalation, and other external-facing actions are local mock actions. They require incident commander or admin approval before execution. Rejections prevent execution and create audit/timeline records.
+- Roles: `admin`, `incident_commander`, `engineer`, `viewer`.
+- JWT auth and protected API dependencies.
+- Viewer cannot run tools or approve actions.
+- Engineer can run read-only tools and agent triage.
+- Incident commander can approve incident actions.
+- Admin can govern tools and inspect global audit/security dashboards.
+- Logs and reports redact secrets, tokens, passwords, bearer tokens, and emails.
+- Runbooks are scanned for prompt-injection attempts.
+- Mock external actions require approval and are audited.
+- Security events are persisted for denied tool access and suspicious runbooks.
 
-## Security Controls
+Threat model: [security/threat_model.md](security/threat_model.md)
 
-- JWT authentication and role-based access.
-- Sensitive log redaction for tokens, API keys, passwords, bearer tokens, and email addresses.
-- Runbook prompt-injection detection for instructions that attempt to bypass policy, reveal hidden prompts, or disable controls.
-- Tool allowlist and role checks.
-- Audit logs and security events.
-- Reports use redacted evidence.
+## Evaluation And Observability
 
-## Reports, Evaluations, and Observability
+The evaluation runner stores local eval runs and cases for:
 
-Incident reports are generated as local Markdown files under `reports/`. Evaluations test redaction, prompt-injection detection, and approval-gate behavior with deterministic local cases. Admin observability computes counts, tool success rate, average latency, pending approvals, agent run totals, and security events.
+- Sensitive log redaction.
+- Prompt-injection detection.
+- Approval-gate enforcement.
 
-## Tests
+Admin observability includes:
+
+- Incident counts.
+- Tool call counts and success/failure rates.
+- Average tool latency.
+- Agent run totals.
+- Pending approvals.
+- Security event counts.
+
+## Verification
+
+These checks were used during development:
 
 ```bash
-make backend-test
-make backend-lint
-make backend-typecheck
-make frontend-typecheck
-make frontend-build
-make evals
-make smoke-test
-make verify
+python -m ruff check .
+python -m mypy app
+python -m pytest
+npm run typecheck
+npm run build
+npm audit --audit-level=moderate
+docker compose config
+python -m app.scripts.seed
+python -m app.scripts.run_evals
+python -m app.scripts.smoke_test
 ```
 
-## Known Limitations
+Current test coverage includes auth, RBAC, incidents, seed data, MCP-style tools, redaction, runbook injection detection, tool call persistence, agent traces, approvals, reports, evals, and admin observability.
 
-- External Slack, Jira, GitHub, PagerDuty, Datadog, and log-ingestion systems are intentionally mocked.
-- The local MCP-style registry is designed for adaptation to official MCP servers but does not call real enterprise systems.
-- The product is local-first and not production infrastructure.
+## Demo Walkthrough
 
-## Intentionally Not Included
+Use [docs/demo-script.md](docs/demo-script.md) for a concise product demo.
 
-No Supabase, cloud hosting, billing, payments, enterprise SSO, Kubernetes, Terraform, Pulumi, production Slack/Jira/GitHub/PagerDuty calls, or real production incident actions.
+Suggested path:
 
-## Future Real Integrations
+1. Log in as `engineer@example.com`.
+2. Open the active checkout incident.
+3. Run log and runbook tools.
+4. Show redaction and prompt-injection warning.
+5. Run the incident triage agent.
+6. Inspect trace steps, hypotheses, remediation plan, tool calls, and approvals.
+7. Log in as `commander@example.com`.
+8. Approve pending mock actions.
+9. Generate an incident report.
+10. Show evals, observability, security events, and audit logs.
 
-See [docs/future-real-integrations.md](docs/future-real-integrations.md). Real integrations should be added only after stronger secrets management, tenant isolation, rate limiting, egress policy, staged rollout, and approval/audit enforcement are in place.
+## Documentation
 
-## Demo Script
+- [Architecture](docs/architecture.md)
+- [API](docs/api.md)
+- [MCP tools](docs/mcp-tools.md)
+- [Agent workflow](docs/agent-workflow.md)
+- [Security](docs/security.md)
+- [Tool governance](docs/tool-governance.md)
+- [Observability](docs/observability.md)
+- [Evaluation](docs/evaluation.md)
+- [Local development](docs/local-development.md)
+- [Future real integrations](docs/future-real-integrations.md)
+- [Demo script](docs/demo-script.md)
 
-Use [docs/demo-script.md](docs/demo-script.md) for a 3-5 minute product walkthrough.
+## Intentional Boundaries
+
+This repository does not include real Slack, Jira, GitHub Issues, PagerDuty, Datadog, or production log ingestion. Those integrations are represented as local mock actions so the approval, audit, and safety model can be demonstrated without touching real systems.
+
+No Supabase, cloud hosting, billing, payments, enterprise SSO, Kubernetes, Terraform, Pulumi, or production infrastructure is included.
+
