@@ -4,7 +4,7 @@ The repository is a local-first monorepo with a FastAPI backend, Next.js fronten
 
 Backend layers:
 
-- `app/api` style routes live in `app/main.py` for this compact portfolio build.
+- `app/api` style routes live in `app/main.py` for this compact local build.
 - `app/db` owns SQLAlchemy models and session setup.
 - `app/mcp` owns tool registry execution and governance enforcement.
 - `app/security` owns redaction and prompt-injection detection.
@@ -37,4 +37,3 @@ sequenceDiagram
 ```
 
 Evaluation flow runs deterministic local cases for redaction, prompt injection, and approval gates, then stores metrics for the dashboard.
-

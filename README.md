@@ -1,6 +1,6 @@
 # Enterprise AI Incident Triage & Automation Agent
 
-Local-first enterprise incident response platform for AI engineering, GenAI, DevOps AI, SRE automation, platform engineering, and LLMOps portfolios.
+Local-first enterprise incident response platform for AI-assisted DevOps, SRE automation, platform operations, and LLMOps workflows.
 
 The system receives incident alerts, classifies severity, searches redacted logs and runbooks through MCP-style tools, checks service health and recent changes, finds related incidents, generates root cause hypotheses, drafts remediation/ticket/status-update artifacts, gates mock external actions behind human approval, stores traces/audit logs, and exposes reports, evaluations, observability, governance, and security dashboards.
 
@@ -138,13 +138,6 @@ No Supabase, cloud hosting, billing, payments, enterprise SSO, Kubernetes, Terra
 
 See [docs/future-real-integrations.md](docs/future-real-integrations.md). Real integrations should be added only after stronger secrets management, tenant isolation, rate limiting, egress policy, staged rollout, and approval/audit enforcement are in place.
 
-## Resume Bullets
-
-- Built a local-first enterprise AI incident triage platform with FastAPI, Next.js, PostgreSQL, Redis, JWT RBAC, MCP-style tools, and deterministic agent workflows.
-- Implemented human approval gates, audit logs, sensitive data redaction, prompt-injection detection, tool governance, incident reports, evals, and observability dashboards.
-- Designed an AI DevOps/SRE automation architecture that can replace mock actions with real Slack, Jira, GitHub, PagerDuty, and observability integrations later.
-
 ## Demo Script
 
-Use [docs/demo-script.md](docs/demo-script.md) for a 3-5 minute recruiter walkthrough.
-
+Use [docs/demo-script.md](docs/demo-script.md) for a 3-5 minute product walkthrough.
