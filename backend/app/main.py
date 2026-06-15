@@ -57,7 +57,6 @@ app.add_middleware(
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
-    role: str = "viewer"
 
 
 class LoginRequest(BaseModel):
@@ -134,14 +133,12 @@ def health() -> dict[str, Any]:
 
 @app.post("/auth/register")
 def register(payload: RegisterRequest, db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    if payload.role not in {"admin", "incident_commander", "engineer", "viewer"}:
-        raise HTTPException(status_code=400, detail="Invalid role")
     if db.scalar(select(models.User).where(models.User.email == payload.email.lower())):
         raise HTTPException(status_code=409, detail="Email already registered")
     user = models.User(
         email=payload.email.lower(),
         hashed_password=hash_password(payload.password),
-        role=payload.role,
+        role="viewer",
     )
     db.add(user)
     audit(db, user_id=user.id, action="auth.register", resource_type="user", resource_id=user.id)
@@ -543,6 +540,15 @@ def api_status_draft(
     return tool_endpoint("draft-status-update", payload, db, user)
 
 
+@app.post("/mcp/tools/request-incident-resolution")
+def api_resolution_request(
+    payload: ToolPayload,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[models.User, Depends(get_current_user)],
+):
+    return tool_endpoint("request-incident-resolution", payload, db, user)
+
+
 @app.post("/mcp/tools/list-recent-service-changes")
 def api_recent_changes(
     payload: ToolPayload,
@@ -851,7 +857,22 @@ def execute_approved_action(
     if not approval:
         raise HTTPException(status_code=403, detail="Approved human gate required")
     external_id = f"MOCK-{approval.id[:8]}"
-    if approval.resource_type == "ticket":
+    if action == "mock_resolve_incident":
+        incident = db.get(models.Incident, payload.incident_id)
+        if not incident:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        incident.status = "resolved"
+        incident.resolved_at = models.now_utc()
+        timeline(
+            db,
+            incident_id=incident.id,
+            event_type="incident.resolved",
+            title="Incident resolved",
+            description="Resolved through approved local mock action.",
+            actor_type="user",
+            actor_id=user.id,
+        )
+    elif approval.resource_type == "ticket":
         ticket = db.get(models.Ticket, approval.resource_id)
         if ticket:
             ticket.status = "executed"
@@ -907,29 +928,11 @@ def action_resolve(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[models.User, Depends(require_role("incident_commander"))],
 ):
+    result = execute_approved_action("mock_resolve_incident", payload, db, user)
     incident = db.get(models.Incident, payload.incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
-    incident.status = "resolved"
-    incident.resolved_at = models.now_utc()
-    timeline(
-        db,
-        incident_id=incident.id,
-        event_type="incident.resolved",
-        title="Incident resolved",
-        description="Resolved through local mock action.",
-        actor_type="user",
-        actor_id=user.id,
-    )
-    audit(
-        db,
-        user_id=user.id,
-        action="mock_resolve_incident",
-        resource_type="incident",
-        resource_id=incident.id,
-    )
-    db.commit()
-    return serialize(incident)
+    return {**result, "incident": serialize(incident)}
 
 
 @app.post("/reports/generate")

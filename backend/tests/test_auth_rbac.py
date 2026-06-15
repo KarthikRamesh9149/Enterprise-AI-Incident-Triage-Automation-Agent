@@ -12,6 +12,23 @@ def test_login_and_me(client):
     assert me.json()["role"] == "engineer"
 
 
+def test_public_registration_cannot_self_assign_privileged_role(client):
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "self-admin@example.com",
+            "password": "DemoPassword123!",
+            "role": "admin",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["role"] == "viewer"
+    token = response.json()["access_token"]
+    audit_response = client.get("/admin/audit-logs", headers={"Authorization": f"Bearer {token}"})
+    assert audit_response.status_code == 403
+
+
 def test_reject_invalid_password(client):
     response = client.post(
         "/auth/login", json={"email": "engineer@example.com", "password": "wrong"}
