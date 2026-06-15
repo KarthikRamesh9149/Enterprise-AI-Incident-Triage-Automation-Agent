@@ -74,6 +74,43 @@ def test_approval_gate_and_mock_action(client, commander_headers, incident_id):
     assert action.json()["status"] == "executed"
 
 
+def test_resolve_incident_requires_approved_human_gate(client, commander_headers, incident_id):
+    response = client.post(
+        "/actions/mock-resolve-incident",
+        headers=commander_headers,
+        json={"incident_id": incident_id},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Approved human gate required"
+
+
+def test_approved_resolution_action_resolves_incident(client, commander_headers, incident_id):
+    draft = client.post(
+        "/mcp/tools/request-incident-resolution",
+        headers=commander_headers,
+        json={"incident_id": incident_id},
+    )
+    assert draft.status_code == 200, draft.text
+    approval_id = draft.json()["approval"]["id"]
+    approved = client.post(
+        f"/approvals/{approval_id}/approve",
+        headers=commander_headers,
+        json={"reviewer_notes": "incident is remediated"},
+    )
+    assert approved.status_code == 200
+
+    response = client.post(
+        "/actions/mock-resolve-incident",
+        headers=commander_headers,
+        json={"incident_id": incident_id},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "executed"
+    assert response.json()["incident"]["status"] == "resolved"
+
+
 def test_report_and_evals(client, admin_headers, incident_id):
     report = client.post(
         "/reports/generate", headers=admin_headers, json={"incident_id": incident_id}

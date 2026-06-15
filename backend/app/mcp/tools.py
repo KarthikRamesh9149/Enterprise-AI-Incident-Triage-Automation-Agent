@@ -240,6 +240,36 @@ def draft_status_update(db: Session, user: models.User, payload: dict[str, Any])
     return {"notification": serialize(notification), "approval": serialize(approval)}
 
 
+def request_incident_resolution(
+    db: Session, user: models.User, payload: dict[str, Any]
+) -> dict[str, Any]:
+    incident = _incident(db, payload["incident_id"])
+    approval = models.Approval(
+        incident_id=incident.id,
+        requested_by=user.id,
+        action_type="mock_resolve_incident",
+        resource_type="incident",
+        resource_id=incident.id,
+        status="pending",
+        request_reason=(
+            "Resolving an incident is a mock external-impacting action and requires approval."
+        ),
+    )
+    db.add(approval)
+    db.flush()
+    timeline(
+        db,
+        incident_id=incident.id,
+        event_type="approval.requested",
+        title="Incident resolution awaiting approval",
+        description=incident.title,
+        actor_type="user",
+        actor_id=user.id,
+        metadata={"approval_id": approval.id},
+    )
+    return {"incident": serialize(incident), "approval": serialize(approval)}
+
+
 TOOL_HANDLERS: dict[str, ToolFunc] = {
     "search-logs": search_logs,
     "search-runbooks": search_runbooks,
@@ -249,6 +279,7 @@ TOOL_HANDLERS: dict[str, ToolFunc] = {
     "get-related-incidents": get_related_incidents,
     "create-ticket-draft": create_ticket_draft,
     "draft-status-update": draft_status_update,
+    "request-incident-resolution": request_incident_resolution,
 }
 
 

@@ -182,6 +182,13 @@ def seed_demo_data(db: Session) -> None:
             "medium",
             True,
         ),
+        (
+            "request-incident-resolution",
+            "Request approval to resolve an incident",
+            "incident_commander",
+            "medium",
+            True,
+        ),
     ]
     for name, description, permission, risk, approval in tool_specs:
         db.add(
