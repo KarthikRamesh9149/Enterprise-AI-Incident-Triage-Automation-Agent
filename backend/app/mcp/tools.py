@@ -344,12 +344,18 @@ def execute_tool(
     return output
 
 
+# Never expose secret columns via the generic serializer. serialize() is used
+# by /auth/register, /auth/login, /auth/me and /admin endpoints, so leaking
+# these would disclose password hashes and tokens in API responses.
+_SENSITIVE_FIELDS = {"hashed_password", "password", "password_hash", "secret", "token", "api_key"}
+
+
 def serialize(row: Any) -> dict[str, Any]:
     if row is None:
         return {}
     result = {}
     for key, value in row.__dict__.items():
-        if key.startswith("_"):
+        if key.startswith("_") or key in _SENSITIVE_FIELDS:
             continue
         result[key] = value.isoformat() if hasattr(value, "isoformat") else value
     return result
