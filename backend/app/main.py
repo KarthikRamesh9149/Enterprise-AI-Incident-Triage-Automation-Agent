@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import desc, func, select
@@ -122,6 +122,18 @@ class GovernancePatch(BaseModel):
     timeout_ms: int | None = None
 
 
+def set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=token,
+        max_age=settings.access_token_expire_minutes * 60,
+        httponly=True,
+        secure=settings.secure_session_cookie,
+        samesite="strict",
+        path="/",
+    )
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
@@ -132,7 +144,11 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/auth/register")
-def register(payload: RegisterRequest, db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+def register(
+    payload: RegisterRequest,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
     if db.scalar(select(models.User).where(models.User.email == payload.email.lower())):
         raise HTTPException(status_code=409, detail="Email already registered")
     user = models.User(
@@ -143,22 +159,30 @@ def register(payload: RegisterRequest, db: Annotated[Session, Depends(get_db)]) 
     db.add(user)
     audit(db, user_id=user.id, action="auth.register", resource_type="user", resource_id=user.id)
     db.commit()
+    token = create_access_token(user)
+    set_session_cookie(response, token)
     return {
-        "access_token": create_access_token(user),
+        "access_token": token,
         "token_type": "bearer",
         "user": serialize(user),
     }
 
 
 @app.post("/auth/login")
-def login(payload: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+def login(
+    payload: LoginRequest,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
     user = authenticate_user(db, payload.email, payload.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     audit(db, user_id=user.id, action="auth.login", resource_type="user", resource_id=user.id)
     db.commit()
+    token = create_access_token(user)
+    set_session_cookie(response, token)
     return {
-        "access_token": create_access_token(user),
+        "access_token": token,
         "token_type": "bearer",
         "user": serialize(user),
     }
@@ -167,6 +191,17 @@ def login(payload: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> dic
 @app.get("/auth/me")
 def me(user: Annotated[models.User, Depends(get_current_user)]) -> dict[str, Any]:
     return serialize(user)
+
+
+@app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        httponly=True,
+        secure=settings.secure_session_cookie,
+        samesite="strict",
+        path="/",
+    )
 
 
 @app.get("/services")

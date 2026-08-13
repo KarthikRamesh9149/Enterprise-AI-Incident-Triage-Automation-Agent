@@ -12,6 +12,10 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      APP_ENV: test
+      LOCAL_DEMO_MODE: "true"
+      AUTO_SEED: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -28,6 +32,10 @@ jobs:
         run: cd backend && mypy app
       - name: Test
         run: cd backend && pytest
+      - name: Deterministic evals
+        run: cd backend && python -m app.scripts.run_evals
+      - name: Smoke test
+        run: cd backend && python -m app.scripts.smoke_test
 
   frontend:
     runs-on: ubuntu-latest
@@ -43,6 +51,8 @@ jobs:
         run: cd frontend && npm run typecheck
       - name: Build
         run: cd frontend && npm run build
+      - name: Dependency audit
+        run: cd frontend && npm audit --audit-level=high
 
   compose:
     runs-on: ubuntu-latest

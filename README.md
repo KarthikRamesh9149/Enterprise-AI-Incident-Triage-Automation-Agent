@@ -1,127 +1,103 @@
 # Enterprise AI Incident Triage & Automation Agent
 
-An enterprise-style, local-first incident response platform that uses an AI triage agent, MCP-style tools, RBAC, audit logs, approval gates, evaluations, and observability dashboards to investigate incidents end to end.
+A local-first incident-response reference application that turns alerts, logs, runbooks, service changes, and related incidents into an evidence-backed triage workflow. The agent can search governed tools, build a hypothesis, draft communications, request approval, and execute **mock** external actions while recording its trace and audit history.
 
-This is built as a real internal operations product: alerts become incidents, the agent gathers evidence through governed tools, likely root causes are scored, remediation and communication drafts are generated, risky actions pause for human approval, and every tool call, trace step, approval, report, and audit event is persisted.
+This repository is a portfolio-grade system, not a production incident-management service. Its default mode is deterministic, works without paid APIs, and never modifies a real ticketing, paging, chat, or infrastructure system.
 
-## What This Demonstrates
+## What it demonstrates
 
-- Agentic workflow design for SRE and DevOps incident response.
-- FastAPI backend architecture with typed models, auth, RBAC, persistence, reports, evals, and auditability.
-- MCP-style tool governance: tool registry, schemas, permissions, risk levels, enable/disable controls, approval requirements, and persisted tool calls.
-- Security-aware AI system behavior: sensitive data redaction, prompt-injection detection, secret-safe reports, and human gates before actions.
-- Deterministic local demo and tests, with optional OpenAI Responses API synthesis for richer incident summaries.
-- Production-minded frontend UX: command center, traces, approvals, reports, evaluations, observability, security, and admin dashboards.
-
-## Core Scenario
-
-The seeded demo incident is a `checkout-api` payment timeout spike after a retry configuration change.
-
-The workflow:
-
-1. Load an alert-backed incident.
-2. Classify severity.
-3. Search redacted application logs.
-4. Search runbooks and flag suspicious prompt-injection content.
-5. Check service health.
-6. Review recent service changes.
-7. Find related historical incidents.
-8. Generate root cause hypotheses and confidence scores.
-9. Draft remediation, ticket, and internal status update artifacts.
-10. Require incident commander/admin approval before mock external actions.
-11. Persist timeline events, tool calls, traces, approvals, reports, eval results, and audit logs.
+- FastAPI API with SQLAlchemy persistence and Alembic migrations.
+- Next.js operations console for incidents, tools, runs, approvals, reports, evals, and administration.
+- Four-level RBAC: `viewer`, `engineer`, `incident_commander`, and `admin`.
+- HTTP-only browser sessions plus bearer-token compatibility for non-browser API clients.
+- Tool allowlisting, minimum-role checks, enable/disable controls, approval gates, timeouts, and audit records.
+- Secret/PII redaction and prompt-injection detection on untrusted runbook content.
+- Deterministic mock triage, stored evaluation cases, and optional bounded OpenAI synthesis.
+- Human approval before every simulated external action.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  UI["Next.js command center"] --> API["FastAPI application API"]
-  API --> Auth["JWT auth + RBAC"]
-  API --> DB["PostgreSQL in Docker / SQLite local fallback"]
-  API --> Redis["Redis readiness for cache/rate limits"]
-  API --> Tools["MCP-style governed tool registry"]
-  Tools --> Logs["Application logs + redaction"]
-  Tools --> Runbooks["Runbooks + prompt-injection checks"]
-  Tools --> Changes["Service changes + related incidents"]
-  API --> Agent["Incident triage agent"]
-  Agent --> LLM["Mock provider or OpenAI Responses API"]
-  Agent --> Approvals["Human approval workflow"]
-  Approvals --> Actions["Mock ticket/status/escalation actions"]
-  API --> Evidence["Traces, reports, evals, audit logs, security events"]
+  Browser["Next.js console"] -->|"HTTP-only session cookie"| API["FastAPI API"]
+  Client["CLI or API client"] -->|"Bearer JWT"| API
+  API --> Auth["Authentication and RBAC"]
+  API --> Agent["Triage orchestrator"]
+  Agent --> Tools["Governed local tool registry"]
+  Agent --> LLM["Mock or OpenAI summary provider"]
+  Tools --> DB[("SQLite or PostgreSQL")]
+  Agent --> Approval["Human approval queue"]
+  Approval --> Mock["Mock-only action executor"]
+  API --> Audit["Audit, trace, and security events"]
 ```
 
-## Product Surfaces
+The backend owns authorization, tool policy, approval state, and provider credentials. The UI is not a security boundary. Redis is included in the local stack and surfaced as configured, but the current application does not yet use it for distributed rate limiting or job execution.
 
-- Incident dashboard and command center.
-- Alert, service, log, runbook, and service-change views.
-- MCP tools console and tool governance.
-- Agent run history and trace viewer.
-- Approval queue for commander/admin review.
-- Mock action executor for approved local actions.
-- Incident reports with redacted evidence.
-- Evaluation dashboard for safety and quality checks.
-- Admin analytics, observability, audit logs, users, tool calls, and security events.
+## Security model
 
-## Tech Stack
+### Authentication and sessions
 
-Backend:
+- Passwords are bcrypt-hashed through Passlib.
+- JWT signing has no repository fallback secret. Outside explicit local/test demo mode, startup fails unless `JWT_SECRET` is at least 32 characters.
+- `LOCAL_DEMO_MODE=true` is permitted only with `APP_ENV=local|test`; it may generate an ephemeral signing key when no key is supplied.
+- Browser login sets an `HttpOnly`, `SameSite=Strict` session cookie. Production-mode cookies also set `Secure`.
+- The frontend sends cookies with requests and never stores bearer credentials in `localStorage`.
+- Cookie-authenticated writes reject missing or untrusted browser origins. CORS uses the explicit `CORS_ORIGINS` allowlist.
+- Login still returns a bearer token for deliberate CLI/API use. Treat it as a secret and do not persist it in browser JavaScript.
 
-- FastAPI, Pydantic v2, SQLAlchemy 2, Alembic.
-- PostgreSQL, Redis, SQLite local fallback.
-- JWT authentication, password hashing, role-based access control.
-- OpenAI Responses API optional provider plus deterministic mock provider.
-- pytest, ruff, mypy.
+### Roles
 
-Frontend:
+| Role | Intended access |
+| --- | --- |
+| `viewer` | Read incidents, services, reports, and low-risk details |
+| `engineer` | Create incidents/alerts, search evidence, and run permitted diagnostic tools |
+| `incident_commander` | Update incident state, request/review operational actions, and manage runbooks |
+| `admin` | Governance, eval execution, security/audit data, analytics, and user visibility |
 
-- Next.js, TypeScript, Tailwind CSS.
-- Role-aware app shell and dashboards.
-- Typed API client and reusable UI components.
+Every protected API route enforces its role server-side. Navigation filtering is only a usability aid.
 
-Local operations:
+### Agent and tool controls
 
-- Docker Compose.
-- Makefile commands.
-- GitHub Actions CI.
-- Seed scripts and deterministic evaluation runner.
+- Only seeded/registered tools can execute.
+- Each tool carries a minimum permission, risk label, enabled state, approval requirement, timeout, and configured rate-limit value.
+- Log search returns redacted content; suspicious runbook instructions create security findings.
+- Ticket creation, status messages, escalation, and resolution are represented locally and require approval.
+- “Execution” produces a `MOCK-*` identifier. There is no real Jira, Slack, PagerDuty, or infrastructure connector.
+- Agent runs, tool calls, approvals, timeline entries, security events, and admin changes are persisted for review.
 
-## Local Setup
+See [docs/security.md](docs/security.md), [security/threat_model.md](security/threat_model.md), and [docs/tool-governance.md](docs/tool-governance.md).
 
-The product runs without external services or paid API calls by default.
+## Quick start: deterministic local demo
+
+Prerequisites: Docker Desktop with Compose.
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Open:
+Open `http://localhost:3000`. The API is at `http://localhost:8000` and its OpenAPI UI at `http://localhost:8000/docs`.
 
-```text
-http://localhost:3000
-```
+The example environment explicitly enables local demo mode and deterministic seeding. Demo identities and the local-only password live in `backend/app/services/seed.py`; the production login form intentionally does not display or prefill them. Never deploy `.env.example` unchanged.
 
-Demo users:
-
-```text
-admin@example.com       / LocalDemoPass123!
-commander@example.com   / LocalDemoPass123!
-engineer@example.com    / LocalDemoPass123!
-viewer@example.com      / LocalDemoPass123!
-```
-
-## Local Development
-
-Backend:
+Stop the stack with:
 
 ```bash
-cd backend
-python -m pip install -e ".[dev]"
-python -m app.scripts.migrate
-python -m app.scripts.seed
-python -m uvicorn app.main:app --reload
+docker compose down
 ```
 
-Frontend:
+### Local processes without Docker
+
+```bash
+cp .env.example .env
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e './backend[dev]'
+cd backend && python -m app.scripts.migrate && python -m app.scripts.seed
+uvicorn app.main:app --reload --port 8000
+```
+
+In a second terminal:
 
 ```bash
 cd frontend
@@ -129,150 +105,102 @@ npm install
 npm run dev
 ```
 
-Useful Make targets:
+For a non-demo environment set `APP_ENV=production`, `LOCAL_DEMO_MODE=false`, `AUTO_SEED=false`, a private 32+ character `JWT_SECRET`, production CORS origins, and a production database URL.
+
+## Mock and live provider behavior
+
+`LLM_PROVIDER=mock` is the default. It is deterministic, makes no network calls, and is used by tests and CI.
+
+Optional OpenAI synthesis is enabled only when both of these are set:
 
 ```bash
-make migrate
-make seed
-make backend-test
-make backend-lint
-make backend-typecheck
-make frontend-typecheck
-make frontend-build
-make evals
-make smoke-test
-make verify
-```
-
-## OpenAI Support
-
-The app is deterministic by default:
-
-```env
-LLM_PROVIDER=mock
-```
-
-To use OpenAI for incident-summary synthesis:
-
-```env
 LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_CHAT_MODEL=gpt-4.1-mini
-MAX_OUTPUT_TOKENS=300
+OPENAI_API_KEY=...
 ```
 
-Tests and CI use the mock provider and never require OpenAI credentials. OpenAI calls receive a structured, redacted incident evidence packet and are instructed to avoid unsupported claims.
+The provider submits only the assembled incident evidence to the configured Responses API model. `MAX_OUTPUT_TOKENS` and `LLM_TEMPERATURE` bound output behavior. If OpenAI mode is requested without a key, or the request fails, the code returns a clearly labeled mock/failure result instead of claiming a successful live inference.
 
-## MCP-Style Tool Layer
+Cost controls:
 
-Tools are registered with:
-
-- Name and description.
-- Input and output schema metadata.
-- Required permission level.
-- Risk level.
-- Approval requirement.
-- Enable/disable state.
-- Timeout and rate-limit fields.
-- Persisted call input/output/status/latency.
-- Audit events.
-
-Implemented tools:
-
-- `search-logs`
-- `search-runbooks`
-- `get-incident-details`
-- `get-service-health`
-- `list-recent-service-changes`
-- `get-related-incidents`
-- `create-ticket-draft`
-- `draft-status-update`
-
-## Security And Governance
-
-- Roles: `admin`, `incident_commander`, `engineer`, `viewer`.
-- JWT auth and protected API dependencies.
-- Viewer cannot run tools or approve actions.
-- Engineer can run read-only tools and agent triage.
-- Incident commander can approve incident actions.
-- Admin can govern tools and inspect global audit/security dashboards.
-- Logs and reports redact secrets, tokens, passwords, bearer tokens, and emails.
-- Runbooks are scanned for prompt-injection attempts.
-- Mock external actions require approval and are audited.
-- Security events are persisted for denied tool access and suspicious runbooks.
-
-Threat model: [security/threat_model.md](security/threat_model.md)
-
-## Evaluation And Observability
-
-The evaluation runner stores local eval runs and cases for:
-
-- Sensitive log redaction.
-- Prompt-injection detection.
-- Approval-gate enforcement.
-
-Admin observability includes:
-
-- Incident counts.
-- Tool call counts and success/failure rates.
-- Average tool latency.
-- Agent run totals.
-- Pending approvals.
-- Security event counts.
+- CI and normal verification use mock mode only.
+- No background live calls are scheduled.
+- Live use requires an operator-supplied key and explicit provider selection.
+- `MAX_OUTPUT_TOKENS` bounds each synthesis response, but the repository does **not** implement a hard monetary budget. Set provider-side project budgets and monitor usage before live use.
 
 ## Verification
 
-These checks were used during development:
+Install backend and frontend dependencies first, then run:
 
 ```bash
-python -m ruff check .
-python -m mypy app
-python -m pytest
-npm run typecheck
-npm run build
-npm audit --audit-level=moderate
-docker compose config
-python -m app.scripts.seed
-python -m app.scripts.run_evals
-python -m app.scripts.smoke_test
+make verify
 ```
 
-Current test coverage includes auth, RBAC, incidents, seed data, MCP-style tools, redaction, runbook injection detection, tool call persistence, agent traces, approvals, reports, evals, and admin observability.
+The aggregate gate runs backend lint, mypy, pytest, frontend typecheck/build, `npm audit --audit-level=high`, deterministic evals, the health smoke test, and Compose validation.
 
-## Demo Walkthrough
+Individual gates:
 
-Use [docs/demo-script.md](docs/demo-script.md) for a concise product demo.
+```bash
+make backend-lint
+make backend-typecheck
+make backend-test
+make frontend-typecheck
+make frontend-build
+make frontend-audit
+make evals
+make smoke-test
+docker compose config --quiet
+```
 
-Suggested path:
+Authentication/RBAC tests cover bearer and cookie sessions, least-privilege registration, protected routes, role denial, fail-closed production secret configuration, untrusted-origin rejection, and browser-source regressions such as token persistence or credential prefilling.
 
-1. Log in as `engineer@example.com`.
-2. Open the active checkout incident.
-3. Run log and runbook tools.
-4. Show redaction and prompt-injection warning.
-5. Run the incident triage agent.
-6. Inspect trace steps, hypotheses, remediation plan, tool calls, and approvals.
-7. Log in as `commander@example.com`.
-8. Approve pending mock actions.
-9. Generate an incident report.
-10. Show evals, observability, security events, and audit logs.
+The deterministic eval runner stores evidence for redaction, prompt-injection detection, and approval-gate behavior. It is a focused safety regression suite, not a claim of model quality or production reliability.
 
-## Documentation
+## Operations
 
-- [Architecture](docs/architecture.md)
-- [API](docs/api.md)
-- [MCP tools](docs/mcp-tools.md)
-- [Agent workflow](docs/agent-workflow.md)
-- [Security](docs/security.md)
-- [Tool governance](docs/tool-governance.md)
-- [Observability](docs/observability.md)
-- [Evaluation](docs/evaluation.md)
-- [Local development](docs/local-development.md)
-- [Future real integrations](docs/future-real-integrations.md)
-- [Demo script](docs/demo-script.md)
+- Health: `GET /health` confirms API process health.
+- System health: `GET /admin/system-health` requires admin and reports database access plus configured components.
+- Audit and security views are admin-only.
+- Generated incident reports are written beneath `REPORT_OUTPUT_DIR`; protect and retain that directory according to your data policy.
+- Apply Alembic migrations before serving a shared database.
+- Rotate `JWT_SECRET` using an operational plan; rotation invalidates existing sessions.
+- Terminate TLS at a trusted ingress and keep backend/frontend on the same schemeful site when using strict cookies.
 
-## Intentional Boundaries
+## Threat model summary
 
-This repository does not include real Slack, Jira, GitHub Issues, PagerDuty, Datadog, or production log ingestion. Those integrations are represented as local mock actions so the approval, audit, and safety model can be demonstrated without touching real systems.
+| Threat | Current control | Remaining risk |
+| --- | --- | --- |
+| Stolen browser token via XSS | HTTP-only cookie; no Web Storage token | XSS can still act as the signed-in user; deploy CSP and harden dependencies |
+| CSRF | Strict SameSite cookie and trusted-origin check on cookie-authenticated writes | Same-site compromise and proxy origin rewriting need deployment review |
+| Weak/default signing key | Startup validation; ephemeral key only in explicit local/test demo | Secret rotation and centralized secret storage are operator responsibilities |
+| Privilege escalation | Server-side RBAC; registration always creates `viewer` | No enterprise IdP, MFA, or account lifecycle workflow |
+| Prompt injection in runbooks | Pattern detection, trust metadata, approval gates | Heuristic detection is bypassable; never treat it as a complete classifier |
+| Sensitive data in evidence | Redaction before tool output/reporting | Raw source rows remain in the database and require access/retention controls |
+| Unsafe automation | Allowlist, role checks, human approval, mock executors | Real connectors would need scoped credentials, idempotency, rollback, and connector-specific policy |
+| Cost runaway | Mock-by-default, explicit live enablement, output-token cap | No hard spend ledger or request quota enforcement |
 
-No Supabase, cloud hosting, billing, payments, enterprise SSO, Kubernetes, Terraform, Pulumi, or production infrastructure is included.
+## Known limitations
 
+- The action layer is intentionally mock-only.
+- Demo data is synthetic and is not representative of production incident distributions.
+- JWTs have expiry but no server-side revocation list or refresh-token rotation.
+- Local email/password auth is not a replacement for SSO/MFA.
+- The configured tool rate-limit field and Redis service are not yet enforced as a distributed control.
+- Evaluation coverage is deterministic and narrow; it does not measure hallucination rate across real incidents.
+- Horizontal scaling, queue workers, HA database design, backup/restore, and production telemetry export are out of scope.
+
+## Repository map
+
+```text
+backend/app/       API, auth, agent workflow, tools, persistence, security
+backend/tests/     API, RBAC, tool, agent, and provider regression tests
+frontend/          Next.js operations console
+docs/              Architecture, API, governance, evaluation, demo, and ops notes
+security/          Threat model
+docker-compose.yml Local PostgreSQL, Redis, API, and UI stack
+```
+
+Start with [docs/architecture.md](docs/architecture.md), [docs/agent-workflow.md](docs/agent-workflow.md), [docs/api.md](docs/api.md), and [docs/local-development.md](docs/local-development.md).
+
+## Responsible use
+
+Do not connect this demo directly to production incident tooling. Before adding real actions, require scoped service identities, tenant isolation, idempotency, change-management approval, connector-level audit evidence, rate enforcement, rollback semantics, and an adversarial security review.

@@ -1,4 +1,4 @@
-.PHONY: up down logs migrate seed demo-data backend-test backend-lint backend-typecheck frontend-install frontend-build frontend-typecheck evals smoke-test verify
+.PHONY: up down logs migrate seed demo-data backend-test backend-lint backend-typecheck frontend-install frontend-build frontend-typecheck frontend-audit evals smoke-test verify
 
 up:
 	docker compose up --build
@@ -35,10 +35,13 @@ frontend-build:
 frontend-typecheck:
 	cd frontend && npm run typecheck
 
+frontend-audit:
+	cd frontend && npm audit --audit-level=high
+
 evals:
 	cd backend && python -m app.scripts.run_evals
 
 smoke-test:
 	cd backend && python -m app.scripts.smoke_test
 
-verify: backend-lint backend-typecheck backend-test frontend-typecheck frontend-build
+verify: backend-lint backend-typecheck backend-test frontend-typecheck frontend-build frontend-audit evals smoke-test

@@ -2,39 +2,33 @@ import type { ApiRow, Incident, Tool, User } from "@/types/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-export function getToken() {
-  if (typeof window === "undefined") return "";
-  return window.localStorage.getItem("incident_agent_token") ?? "";
-}
-
-export function setToken(token: string) {
-  window.localStorage.setItem("incident_agent_token", token);
-}
-
-export function clearToken() {
-  window.localStorage.removeItem("incident_agent_token");
-}
-
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
-  const token = getToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers,
+    cache: "no-store",
+    credentials: "include"
+  });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(String(detail.detail ?? response.statusText));
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
 export async function login(email: string, password: string) {
-  const result = await apiFetch<{ access_token: string; user: User }>("/auth/login", {
+  const result = await apiFetch<{ user: User }>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password })
   });
-  setToken(result.access_token);
   return result.user;
+}
+
+export async function logout() {
+  await apiFetch<void>("/auth/logout", { method: "POST", body: JSON.stringify({}) });
 }
 
 export const api = {
@@ -74,4 +68,3 @@ export const api = {
     }),
   runEvals: () => apiFetch<ApiRow>("/evals/run", { method: "POST", body: JSON.stringify({}) })
 };
-

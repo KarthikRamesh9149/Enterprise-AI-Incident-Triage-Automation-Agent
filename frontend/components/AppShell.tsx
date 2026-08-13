@@ -4,7 +4,7 @@ import { Activity, BookOpen, ClipboardCheck, Gauge, Home, ListChecks, LockKeyhol
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { api, clearToken } from "@/lib/api";
+import { api, logout } from "@/lib/api";
 import type { Role, User } from "@/types/api";
 
 const nav = [
@@ -80,8 +80,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="rounded-md border border-line bg-slate-50 px-3 py-1 text-xs">{user?.email} · {user?.role}</span>
             <button
               className="rounded-md border border-line px-3 py-1 text-xs hover:bg-slate-100"
-              onClick={() => {
-                clearToken();
+              onClick={async () => {
+                await logout().catch(() => undefined);
+                setUser(null);
                 router.replace("/login");
               }}
             >
@@ -94,4 +95,3 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
